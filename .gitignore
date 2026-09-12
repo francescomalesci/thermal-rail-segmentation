@@ -1,0 +1,19 @@
+# Ambienti virtuali
+venv/
+.conda/
+__pycache__/
+*.pyc
+
+# Dataset e Pesi
+data/*
+!data/sample/
+runs/
+checkpoints/
+*.pt
+*.pth
+*.onnx
+
+# File di sistema e IDE
+.DS_Store
+.vscode/
+.idea/

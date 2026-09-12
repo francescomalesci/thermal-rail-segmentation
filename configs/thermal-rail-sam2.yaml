@@ -1,0 +1,83 @@
+load: ./save/railvid_GEO_SHARP_V2/model_epoch_best.pth
+
+eval_type: cod
+sam_checkpoint: ./save/railvid_GEO_SHARP_V2/model_epoch_best.pth
+
+train_dataset:
+  dataset:
+    name: paired-image-folders
+    args:
+      # PUNTA AL NUOVO DATASET
+      root_path_1: datasets/Cvat/train/images
+      root_path_2: datasets/Cvat/train/label
+      cache: none
+      split_key: train
+  wrapper:
+    name: train
+    args:
+      inp_size: 1024
+      augment: true
+  batch_size: 2
+
+val_dataset:
+  dataset:
+    name: paired-image-folders
+    args:
+      root_path_1: datasets/Cvat/val/images
+      root_path_2: datasets/Cvat/val/label
+      cache: none
+      split_key: test
+  wrapper:
+    name: val
+    args:
+      inp_size: 1024
+  batch_size: 2
+
+data_norm:
+  inp:
+    sub: [0.5]
+    div: [0.5]
+  gt:
+    sub: [0.5]
+    div: [0.5]
+
+model:
+  name: sam
+  args:
+    inp_size: 1024
+    loss: iou
+    encoder_mode:
+      name: sam
+      img_size: 1024
+      mlp_ratio: 4
+      patch_size: 16
+      qkv_bias: true
+      use_rel_pos: true
+      window_size: 14
+      out_chans: 256
+      scale_factor: 32
+      input_type: fft
+      freq_nums: 0.15
+      prompt_type: highpass
+      prompt_embed_dim: 256
+      tuning_stage: 1234
+      handcrafted_tune: true
+      embedding_tune: true
+      adaptor: adaptor
+      embed_dim: 256
+      depth: 12
+      num_heads: 4
+      global_attn_indexes: [2, 5, 8, 11]
+
+optimizer:
+  name: adamw
+  args:
+    # ABBASSA IL LEARNING RATE (Fondamentale per non dimenticare le basi)
+    lr: 0.00001
+lr_min: 1.0e-7
+epoch_max: 50
+multi_step_lr:
+  milestones: [20, 35]
+  gamma: 0.1
+epoch_val: 1
+epoch_save: 1
