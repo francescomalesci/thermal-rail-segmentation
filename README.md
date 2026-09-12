@@ -16,7 +16,7 @@ Developed as a Bachelor's Thesis project in Computer Engineering.
 
 ## 📸 Demo & Results
 
-### 1. Spatial AND Logic 
+### 1. Mask-Box Fusion Logic
 The pipeline successfully merges YOLO bounding boxes with SAM 2 segmentation masks. Objects detected *inside* the track mask are flagged as **CRITICAL**, while objects *outside* are flagged as **Ignored**.
 
 ![Static Inference Demo](assets/demo_spatial.jpg)
