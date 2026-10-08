@@ -1,16 +1,31 @@
 # Thermal Rail Segmentation & Object Detection Pipeline
 
-Computer Vision pipeline designed for automated infrastructure segmentation and anomaly detection on thermal/infrared video streams. 
-This project integrates Deep Learning models to extract track masks and identify obstacles in low-visibility environments.
+End-to-end computer vision pipeline for railway track segmentation and obstacle detection on thermal (infrared) video, built for low-visibility conditions where RGB cameras fail.
+
+The system combines a fine-tuned YOLO detector (cars, people and other objects) with a SAM 2-based track segmenter, and fuses the two to decide which detections are actually dangerous: an object on the track is critical, an object beside it is not.
 
 Developed as a Bachelor's Thesis project in Computer Engineering.
 
 ## 🎯 Architecture & Tech Stack
 * **Goal:** High-accuracy segmentation of railway tracks and bounding box localization of potential hazards.
 * **Core Models:** 
-  * Fine-tuned **Ultralytics YOLO** for fast, real-time object detection.
+  * Fine-tuned **Ultralytics YOLO** for fast, real-time detection of **cars, people and generic objects**, trained on a dataset of objects and ~10k images from the **FLIR thermal dataset**.
   * **SAM 2 (Segment Anything Model 2)** with a custom adapter, fine-tuned for thermal domain prompt-based mask generation.
-* **Stack:** Python, PyTorch, OpenCV, NumPy, CUDA.
+  * **Custom Dataset:** a rail segmentation dataset built from real field video frames and annotated with **CVAT**, used to improve track segmentation accuracy.
+* **Stack:** Python, PyTorch, OpenCV, NumPy, CUDA, CVAT.
+
+## ⚙️ How It Works
+
+```text
+Thermal frame
+   ├─► YOLO ────────────► bounding boxes (car, person, object)
+   └─► SAM 2 + adapter ─► track mask
+                │
+        Mask-Box Fusion
+                │
+   box inside track mask  → CRITICAL
+   box outside track mask → IGNORED
+```
 
 ---
 
@@ -21,19 +36,20 @@ The pipeline successfully merges YOLO bounding boxes with SAM 2 segmentation mas
 
 ![Static Inference Demo](assets/demo_spatial.jpg)
 
-### 2. Zero-Shot Real-World Inference (WIP)
-Testing the pipeline on out-of-distribution (OOD) field video streams.
+### 2. Zero-Shot Real-World Inference
+Testing the pipeline on out-of-distribution (OOD) field video streams, never seen during training. Fine-tuning the segmenter on the CVAT-annotated rail dataset improved track masks on this footage.
 
-![Field Video Demo](assets/demo_video.gif)
+![Field Video Demo](assets/demo2.gif)
 
 ### YOLO Training Metrics
+Yolo training metrics from objects training.
 ![YOLO Training Results](assets/yolo_results.png)
 
 #### 🔍 Engineering Analysis & Known Limitations
 The model demonstrates high precision on the validation set, but encounters specific edge cases during zero-shot real-world video inference:
 * **Domain Shift:** The field video contains environmental variations and thermal noise not present in the training distribution.
 * **Temporal Consistency:** Inference is currently performed frame-by-frame, causing minor flickering in the segmentation masks.
-* **Next Steps:** Enhancing track segmentation accuracy and improving anomaly detection precision in complex scenarios.
+* **Next Steps:** Temporal smoothing across frames, more annotated rail data from varied scenes, and improved anomaly detection precision in complex scenarios.
 
 ---
 
@@ -85,3 +101,4 @@ python src/train.py --config configs/thermal-rail-sam2.yaml --name my_custom_tra
 * **VRAM Optimization:** Forced `.cpu()` offloading during validation loops to prevent CUDA Out Of Memory errors.
 * **Backbone Freezing:** Frozen SAM2 image encoder to retain zero-shot generalization while training only the custom adapter.
 * **Custom Augmentations:** Implemented robust preprocessing and `RandomErasing` to prevent overfitting on small domain-specific datasets.
+* **Custom Data Pipeline:** Rail masks annotated in CVAT from real field video, to close the gap between public data and deployment conditions.
