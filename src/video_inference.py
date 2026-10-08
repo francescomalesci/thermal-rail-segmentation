@@ -90,8 +90,9 @@ def reconstruct_dynamic_lane(raw_mask):
     return perfect_mask
 
 def process_video(args):
-    print("[INFO] Initializing YOLO...")
-    yolo_model = YOLO(args.yolo_weights)
+    print("[INFO] Initializing YOLO (Anomalie + FLIR)...")
+    yolo_anomalie = YOLO(args.yolo_anomalie_weights)
+    yolo_flir = YOLO(args.yolo_flir_weights)
 
     print("[INFO] Initializing SAM2...")
     with open(args.sam_config, 'r') as f:
@@ -119,6 +120,8 @@ def process_video(args):
     print(f"[INFO] Processing video ({w}x{h} @ {fps} fps)...")
     start_time = time.time()
 
+    last_valid_mask = None
+
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
@@ -139,12 +142,34 @@ def process_video(args):
         mask_binary = (np.array(mask_resized) > 127).astype(float)
             
         track_mask = reconstruct_dynamic_lane(mask_binary)
+
+        # --- PHASE A.1: TEMPORAL FALLBACK LOGIC ---
+        current_area = np.sum(track_mask)
         
-        # --- PHASE B: YOLO INFERENCE ---
-        results = yolo_model(frame, conf=args.conf_thresh, verbose=False)[0]
+        if last_valid_mask is not None:
+            last_area = np.sum(last_valid_mask)
+            if current_area < (last_area * 0.2):
+                track_mask = last_valid_mask.copy()
+                cv2.putText(frame, "MEMORIA MASCHERA", (w - 250, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 165, 255), 2)
+            else:
+                last_valid_mask = track_mask.copy()
+        else:
+            if current_area > 0:
+                last_valid_mask = track_mask.copy()
+        
+        # --- PHASE B: YOLO INFERENCE (DUAL MODEL) ---
+        res_anomalie = yolo_anomalie(frame, conf=args.conf_thresh, verbose=False)[0]
+        res_flir = yolo_flir(frame, conf=args.conf_thresh, verbose=False)[0]
+        
+        all_boxes = []
+        for box in res_anomalie.boxes:
+            all_boxes.append((box, yolo_anomalie.names[int(box.cls[0])]))
+            
+        for box in res_flir.boxes:
+            all_boxes.append((box, yolo_flir.names[int(box.cls[0])]))
         
         # --- PHASE C: LOGICAL GATE (MASK OVERLAP) ---
-        for box in results.boxes:
+        for box, nome_classe in all_boxes:
             x1, y1, x2, y2 = map(int, box.xyxy[0])
             conf = float(box.conf[0])
             
@@ -156,11 +181,11 @@ def process_video(args):
             if np.any(box_area_on_mask == 1.0):
                 # CRITICAL HAZARD (Red Box)
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
-                cv2.putText(frame, f"CRITICAL: {conf:.2f}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+                cv2.putText(frame, f"CRITICO {nome_classe}: {conf:.2f}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
             else:
                 # IGNORED OBSTACLE (Yellow Box)
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 255), 2)
-                cv2.putText(frame, f"Ignored: {conf:.2f}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
+                cv2.putText(frame, f"Ignorato {nome_classe}: {conf:.2f}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
 
         # --- PHASE D: VISUAL MASK OVERLAY ---
         alpha = 0.4
@@ -183,7 +208,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="End-to-End Thermal Rail Hazard Detection")
     parser.add_argument('--input_video', type=str, required=True, help="Path to input video")
     parser.add_argument('--output_video', type=str, default="output.mp4", help="Path to save output video")
-    parser.add_argument('--yolo_weights', type=str, required=True, help="Path to YOLO best.pt")
+    parser.add_argument('--yolo_anomalie_weights', type=str, required=True, help="Path to YOLO anomalie best.pt")
+    parser.add_argument('--yolo_flir_weights', type=str, required=True, help="Path to YOLO FLIR best.pt")
     parser.add_argument('--sam_weights', type=str, required=True, help="Path to SAM2 model.pth")
     parser.add_argument('--sam_config', type=str, default='configs/thermal-rail-sam2.yaml', help="Path to SAM2 config")
     parser.add_argument('--conf_thresh', type=float, default=0.5, help="YOLO confidence threshold")
