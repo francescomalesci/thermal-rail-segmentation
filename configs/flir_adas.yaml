@@ -1,0 +1,8 @@
+path: C:/Users/franc/Documents/Tesi/sam2-adapter/dataset_flir
+train: images/train
+val: images/val
+
+# Definizione delle classi (gli ID devono corrispondere allo script di conversione)
+names:
+  0: person
+  1: car
